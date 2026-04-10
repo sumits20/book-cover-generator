@@ -135,7 +135,12 @@ def generate_with_openai(prompt: str, size: str, model: str) -> Tuple[Image.Imag
     return img, image_url, "Generated with OpenAI"
 
 
-def generate_with_grok(prompt: str, model: str) -> Tuple[Image.Image, Optional[str], str]:
+def generate_with_grok(
+    prompt: str,
+    model: str,
+    aspect_ratio: str = "17:22",
+    resolution: str = "2k",
+) -> Tuple[Image.Image, Optional[str], str]:
     if OpenAI is None:
         raise RuntimeError("openai package is not installed. Add it to requirements.txt.")
     if not XAI_API_KEY:
@@ -149,6 +154,10 @@ def generate_with_grok(prompt: str, model: str) -> Tuple[Image.Image, Optional[s
     result = client.images.generate(
         model=model,
         prompt=prompt,
+        extra_body={
+            "aspect_ratio": aspect_ratio,
+            "resolution": resolution,
+        },
     )
 
     item = result.data[0]
@@ -161,7 +170,7 @@ def generate_with_grok(prompt: str, model: str) -> Tuple[Image.Image, Optional[s
     else:
         raise RuntimeError("Grok/xAI returned no image data.")
 
-    return img, image_url, "Generated with Grok / xAI"
+    return img, image_url, f"Generated with Grok / xAI ({aspect_ratio}, {resolution})"
 
 
 def generate_with_together(
@@ -383,13 +392,13 @@ with st.sidebar:
             "OpenAI image model",
             ["gpt-image-1"],
         )
-        image_size = st.selectbox(
-            "Image size",
-            ["1024x1024", "1024x1536", "1536x1024"],
-            index=1,
-        )
-        width = None
-        height = None
+        width = st.selectbox("Width", [768, 1024], index=1)
+        
+        ratio = 11 / 8.5
+        height = int(width * ratio)
+        
+        st.caption(f"Auto height for 8.5x11 ratio: {height}")
+        
         together_steps = None
         seed_value = None
 
