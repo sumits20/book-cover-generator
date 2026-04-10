@@ -182,10 +182,8 @@ def generate_with_grok(prompt: str, model: str) -> Tuple[Image.Image, str]:
 def generate_dual_images(provider, prompt, model, size=None, steps=None):
     """Generate two themed images: front and back cover"""
 
-    front_prompt = prompt + "
-Focus on FRONT COVER: main subject centered, bold composition, title space at top."
-    back_prompt = prompt + "
-Focus on BACK COVER: simpler layout, background scene, space for text blurb, minimal central subject."
+    front_prompt = prompt + "\nFocus on FRONT COVER: main subject centered, bold composition, title space at top."
+    back_prompt = prompt + "\nFocus on BACK COVER: simpler layout, background scene, space for text blurb, minimal central subject."
 
     if provider == "OpenAI":
         front, _ = generate_with_openai(front_prompt, size, model)
