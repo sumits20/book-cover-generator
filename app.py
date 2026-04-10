@@ -249,7 +249,7 @@ with col1:
     )
     extra_style = st.text_area(
         "Extra style instructions",
-        value="decorative border, fun cover composition, stars around the edges, bold black outlines, no shading, no grayscale",
+        value="decorative border, fun cover composition, stars around the edges",
         height=100,
     )
 
