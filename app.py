@@ -138,7 +138,7 @@ def generate_with_openai(prompt: str, size: str, model: str) -> Tuple[Image.Imag
 def generate_with_grok(
     prompt: str,
     model: str,
-    aspect_ratio: str = "17:22",
+    aspect_ratio: str = "3:4",
     resolution: str = "2k",
 ) -> Tuple[Image.Image, Optional[str], str]:
     if OpenAI is None:
