@@ -326,7 +326,7 @@ def generate_dual_images(
             "back_image": back_img,
             "front_url": front_url,
             "back_url": back_url,
-            "note": f"{front_note}. OpenAI version uses matched prompts but not shared seed/reference in this app."
+            "note": f"{front_note}. {back_note}"
         }
 
     if provider == "Grok / xAI":
