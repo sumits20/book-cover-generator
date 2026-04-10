@@ -238,6 +238,7 @@ Image goal:
 - keep decorative environmental details only
 - provide a calmer composition with open readable space in the middle and upper-middle for blurb text
 - suitable as a professional back cover background
+- No texts
 """
 
 
