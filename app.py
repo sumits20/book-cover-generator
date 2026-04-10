@@ -177,6 +177,32 @@ def generate_with_grok(prompt: str, model: str) -> Tuple[Image.Image, str]:
 
 
 # =========================
+# Dual Image Generator (Front + Back)
+# =========================
+def generate_dual_images(provider, prompt, model, size=None, steps=None):
+    """Generate two themed images: front and back cover"""
+
+    front_prompt = prompt + "
+Focus on FRONT COVER: main subject centered, bold composition, title space at top."
+    back_prompt = prompt + "
+Focus on BACK COVER: simpler layout, background scene, space for text blurb, minimal central subject."
+
+    if provider == "OpenAI":
+        front, _ = generate_with_openai(front_prompt, size, model)
+        back, _ = generate_with_openai(back_prompt, size, model)
+
+    elif provider == "Grok / xAI":
+        front, _ = generate_with_grok(front_prompt, model)
+        back, _ = generate_with_grok(back_prompt, model)
+
+    else:
+        front, _ = generate_with_together(front_prompt, model, steps)
+        back, _ = generate_with_together(back_prompt, model, steps)
+
+    return front, back
+
+
+# =========================
 # UI
 # =========================
 st.title("🎨 Coloring Book Front Page Generator")
@@ -249,7 +275,7 @@ with col1:
     )
     extra_style = st.text_area(
         "Extra style instructions",
-        value="decorative border, fun cover composition, stars around the edges",
+        value="decorative border, fun cover composition, stars around the edges, bold black outlines, no shading, no grayscale",
         height=100,
     )
 
@@ -260,7 +286,7 @@ with col1:
         placeholder="Leave blank to use the app-generated prompt.",
     )
 
-    if st.button("Generate front page", type="primary", use_container_width=True):
+    if st.button("Generate covers (Front + Back)", type="primary", use_container_width=True):
         try:
             final_prompt = manual_prompt.strip() or normalize_cover_prompt(
                 title=title,
@@ -273,28 +299,21 @@ with col1:
 
             st.session_state["final_prompt"] = final_prompt
 
-            with st.spinner("Generating cover image..."):
-                if provider == "OpenAI":
-                    image, note = generate_with_openai(
-                        prompt=final_prompt,
-                        size=image_size,
-                        model=provider_model,
-                    )
-                elif provider == "Grok / xAI":
-                    image, note = generate_with_grok(
-                        prompt=final_prompt,
-                        model=provider_model,
-                    )
-                else:
-                    image, note = generate_with_together(
-                        prompt=final_prompt,
-                        model=provider_model,
-                        steps=together_steps,
-                    )
+            with st.spinner("Generating front and back covers..."):
+                front_img, back_img = generate_dual_images(
+                    provider=provider,
+                    prompt=final_prompt,
+                    model=provider_model,
+                    size=image_size if provider == "OpenAI" else None,
+                    steps=together_steps if provider == "Together AI" else None,
+                )
 
-            st.session_state["generated_image"] = image
-            st.session_state["generation_note"] = note
-            st.success("Front cover generated successfully.")
+            st.session_state["front_image"] = front_img
+            st.session_state["back_image"] = back_img
+            st.success("Front and back covers generated successfully.")
+
+        except Exception as e:
+            st.error(f"Generation failed: {e}")
 
         except Exception as e:
             st.error(f"Generation failed: {e}")
@@ -302,21 +321,21 @@ with col1:
 with col2:
     st.subheader("Preview")
 
-    if "generated_image" in st.session_state:
-        img = st.session_state["generated_image"]
-        st.image(img, caption=st.session_state.get("generation_note", "Preview"), use_container_width=True)
+    if "front_image" in st.session_state:
+        colf, colb = st.columns(2)
 
-        png_bytes = pil_to_png_bytes(img)
-        safe_name = title.lower().replace(" ", "_")[:40] or "coloring_book_cover"
-        st.download_button(
-            "Download PNG",
-            data=png_bytes,
-            file_name=f"{safe_name}_cover.png",
-            mime="image/png",
-            use_container_width=True,
-        )
+        with colf:
+            st.image(st.session_state["front_image"], caption="Front Cover", use_container_width=True)
+            front_bytes = pil_to_png_bytes(st.session_state["front_image"])
+            st.download_button("Download Front", front_bytes, file_name="front_cover.png")
+
+        with colb:
+            st.image(st.session_state["back_image"], caption="Back Cover", use_container_width=True)
+            back_bytes = pil_to_png_bytes(st.session_state["back_image"])
+            st.download_button("Download Back", back_bytes, file_name="back_cover.png")
+
     else:
-        st.info("Your generated cover will appear here.")
+        st.info("Your generated covers will appear here.")
 
 st.divider()
 
