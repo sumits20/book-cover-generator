@@ -1,6 +1,7 @@
 import os
 import io
 import base64
+import random
 from typing import Optional, Tuple
 
 import requests
@@ -19,8 +20,8 @@ except Exception:
 
 
 st.set_page_config(
-    page_title="Coloring Book Cover Generator",
-    page_icon="🎨",
+    page_title="Book Cover Generator",
+    page_icon="📚",
     layout="wide",
 )
 
@@ -40,50 +41,13 @@ XAI_API_KEY = get_secret("XAI_API_KEY")
 TOGETHER_API_KEY = get_secret("TOGETHER_API_KEY")
 
 
-def normalize_cover_prompt(
-    title: str,
-    subtitle: str,
-    theme: str,
-    age_group: str,
-    extra_style: str,
-    include_text: bool,
-) -> str:
-    text_rule = (
-        "Include the exact title text and subtitle text in a clean, readable, centered book-cover layout."
-        if include_text
-        else "Do not render any text or letters in the image; create illustration-only cover art with a blank title area at the top."
-    )
-
-    prompt = f"""
-Create a professional coloring book front cover.
-Theme: {theme}
-Target age group: {age_group}
-Book title: {title}
-Subtitle: {subtitle}
-Style requirements:
-- vibrant full color illustration
-- cartoonish, cheerful, kid-friendly style
-- soft lighting with depth of field (background slightly blurred)
-- rich colors with smooth gradients
-- detailed but clean composition
-- professional children’s book cover style
-- centered balanced composition
-- visually engaging foreground subject with depth
-- portrait front cover composition
-- joyful and appealing mood
-{text_rule}
-Additional styling: {extra_style}
-""".strip()
-    return prompt
-
-
 def decode_base64_to_pil(b64_string: str) -> Image.Image:
     image_bytes = base64.b64decode(b64_string)
     return Image.open(io.BytesIO(image_bytes))
 
 
 def fetch_image_from_url(url: str) -> Image.Image:
-    response = requests.get(url, timeout=60)
+    response = requests.get(url, timeout=90)
     response.raise_for_status()
     return Image.open(io.BytesIO(response.content))
 
@@ -94,10 +58,57 @@ def pil_to_png_bytes(img: Image.Image) -> bytes:
     return buf.getvalue()
 
 
+def normalize_cover_prompt(
+    title: str,
+    subtitle: str,
+    theme: str,
+    age_group: str,
+    extra_style: str,
+    include_text: bool,
+) -> str:
+    text_rule = (
+        f'Include the exact title "{title}" and subtitle "{subtitle}" in a clean, readable, professional children’s book cover layout.'
+        if include_text
+        else "Do not render any text or letters in the image. Leave natural empty composition space for later text placement."
+    )
+
+    prompt = f"""
+Create a professional children's book cover illustration.
+Theme: {theme}
+Target age group: {age_group}
+Book title: {title}
+Subtitle: {subtitle}
+
+Style requirements:
+- vibrant full color illustration
+- cartoonish, cheerful, happy, kid-friendly style
+- soft lighting with cinematic depth of field
+- same color tone and warm visual temperature across matching covers
+- rich colors with smooth gradients
+- professional children’s publishing quality
+- detailed but clean composition
+- appealing foreground subject with dimensional depth
+- polished storybook illustration feel
+- visually cohesive series-style artwork
+
+Consistency requirements:
+- maintain the same visual identity across front and back
+- keep the same palette family, lighting mood, color temperature, and world design
+- matching illustration style across both images
+
+{text_rule}
+
+Additional styling:
+{extra_style}
+""".strip()
+
+    return prompt
+
+
 # =========================
 # Provider functions
 # =========================
-def generate_with_openai(prompt: str, size: str, model: str) -> Tuple[Image.Image, str]:
+def generate_with_openai(prompt: str, size: str, model: str) -> Tuple[Image.Image, Optional[str], str]:
     if OpenAI is None:
         raise RuntimeError("openai package is not installed. Add it to requirements.txt.")
     if not OPENAI_API_KEY:
@@ -112,48 +123,23 @@ def generate_with_openai(prompt: str, size: str, model: str) -> Tuple[Image.Imag
     )
 
     item = result.data[0]
+    image_url = getattr(item, "url", None)
+
     if getattr(item, "b64_json", None):
         img = decode_base64_to_pil(item.b64_json)
-    elif getattr(item, "url", None):
-        img = fetch_image_from_url(item.url)
+    elif image_url:
+        img = fetch_image_from_url(image_url)
     else:
         raise RuntimeError("OpenAI returned no image data.")
 
-    return img, "Generated with OpenAI"
+    return img, image_url, "Generated with OpenAI"
 
 
-def generate_with_together(prompt: str, model: str, steps: int, n: int = 1) -> Tuple[Image.Image, str]:
-    if Together is None:
-        raise RuntimeError("together package is not installed. Add it to requirements.txt.")
-    if not TOGETHER_API_KEY:
-        raise RuntimeError("TOGETHER_API_KEY is missing.")
-
-    client = Together(api_key=TOGETHER_API_KEY)
-    response = client.images.generate(
-        prompt=prompt,
-        model=model,
-        steps=steps,
-        n=n,
-    )
-
-    item = response.data[0]
-    if getattr(item, "b64_json", None):
-        img = decode_base64_to_pil(item.b64_json)
-    elif getattr(item, "url", None):
-        img = fetch_image_from_url(item.url)
-    else:
-        raise RuntimeError("Together AI returned no image data.")
-
-    return img, f"Generated with Together AI using {model}"
-
-
-def generate_with_grok(prompt: str, model: str) -> Tuple[Image.Image, str]:
-    if not XAI_API_KEY:
-        raise RuntimeError("XAI_API_KEY is missing.")
-
-    # xAI supports OpenAI-compatible image generation at base_url=https://api.x.ai/v1
+def generate_with_grok(prompt: str, model: str) -> Tuple[Image.Image, Optional[str], str]:
     if OpenAI is None:
         raise RuntimeError("openai package is not installed. Add it to requirements.txt.")
+    if not XAI_API_KEY:
+        raise RuntimeError("XAI_API_KEY is missing.")
 
     client = OpenAI(
         api_key=XAI_API_KEY,
@@ -166,54 +152,221 @@ def generate_with_grok(prompt: str, model: str) -> Tuple[Image.Image, str]:
     )
 
     item = result.data[0]
+    image_url = getattr(item, "url", None)
+
     if getattr(item, "b64_json", None):
         img = decode_base64_to_pil(item.b64_json)
-    elif getattr(item, "url", None):
-        img = fetch_image_from_url(item.url)
+    elif image_url:
+        img = fetch_image_from_url(image_url)
     else:
         raise RuntimeError("Grok/xAI returned no image data.")
 
-    return img, "Generated with Grok / xAI"
+    return img, image_url, "Generated with Grok / xAI"
+
+
+def generate_with_together(
+    prompt: str,
+    model: str,
+    width: int,
+    height: int,
+    steps: int,
+    seed: int,
+    reference_images: Optional[list[str]] = None,
+) -> Tuple[Image.Image, Optional[str], str]:
+    if Together is None:
+        raise RuntimeError("together package is not installed. Add it to requirements.txt.")
+    if not TOGETHER_API_KEY:
+        raise RuntimeError("TOGETHER_API_KEY is missing.")
+
+    client = Together(api_key=TOGETHER_API_KEY)
+
+    kwargs = {
+        "prompt": prompt,
+        "model": model,
+        "width": width,
+        "height": height,
+        "steps": steps,
+        "seed": seed,
+        "n": 1,
+    }
+
+    if reference_images:
+        kwargs["reference_images"] = reference_images
+
+    response = client.images.generate(**kwargs)
+
+    item = response.data[0]
+    image_url = getattr(item, "url", None)
+
+    if getattr(item, "b64_json", None):
+        img = decode_base64_to_pil(item.b64_json)
+    elif image_url:
+        img = fetch_image_from_url(image_url)
+    else:
+        raise RuntimeError("Together AI returned no image data.")
+
+    return img, image_url, f"Generated with Together AI using {model} (seed={seed})"
 
 
 # =========================
-# Dual Image Generator (Front + Back)
+# Prompt builders
 # =========================
-def generate_dual_images(provider, prompt, model, size=None, steps=None):
-    """Generate two themed images: front and back cover"""
+def build_front_prompt(base_prompt: str) -> str:
+    return base_prompt + """
 
-    front_prompt = prompt + "\nFocus on FRONT COVER: main subject centered, bold composition, title space at top."
-    back_prompt = prompt + "\nFocus on BACK COVER: simpler layout, background scene, space for text blurb, minimal central subject."
+Image goal:
+- FRONT COVER
+- main hero subject clearly visible
+- strong focal point
+- attractive foreground composition
+- premium children’s book cover feel
+- leave some clean space near the top for title placement
+- keep it lively, joyful, and highly engaging
+"""
+
+
+def build_back_prompt(base_prompt: str) -> str:
+    return base_prompt + """
+
+Image goal:
+- BACK COVER
+- background-only style scene for blurb placement
+- same world, same theme, same palette family, same lighting mood, same temperature as the front
+- NO main character portrait
+- NO central subject
+- NO large foreground figure
+- keep decorative environmental details only
+- provide a calmer composition with open readable space in the middle and upper-middle for blurb text
+- suitable as a professional back cover background
+"""
+
+
+# =========================
+# Dual generation
+# =========================
+def generate_dual_images(
+    provider: str,
+    base_prompt: str,
+    model: str,
+    size: Optional[str] = None,
+    steps: Optional[int] = None,
+    width: Optional[int] = None,
+    height: Optional[int] = None,
+    seed: Optional[int] = None,
+):
+    front_prompt = build_front_prompt(base_prompt)
+    back_prompt = build_back_prompt(base_prompt)
+
+    if provider == "Together AI":
+        if seed is None:
+            raise RuntimeError("Seed is required for Together AI.")
+
+        front_img, front_url, front_note = generate_with_together(
+            prompt=front_prompt,
+            model=model,
+            width=width,
+            height=height,
+            steps=steps,
+            seed=seed,
+            reference_images=None,
+        )
+
+        back_img, back_url, back_note = generate_with_together(
+            prompt=back_prompt,
+            model=model,
+            width=width,
+            height=height,
+            steps=steps,
+            seed=seed,
+            reference_images=[front_url] if front_url else None,
+        )
+
+        return {
+            "front_image": front_img,
+            "back_image": back_img,
+            "front_url": front_url,
+            "back_url": back_url,
+            "note": f"{front_note}. Back cover used same seed and front reference image."
+        }
 
     if provider == "OpenAI":
-        front, _ = generate_with_openai(front_prompt, size, model)
-        back, _ = generate_with_openai(back_prompt, size, model)
+        front_img, front_url, front_note = generate_with_openai(
+            prompt=front_prompt,
+            size=size,
+            model=model,
+        )
+        back_img, back_url, back_note = generate_with_openai(
+            prompt=back_prompt,
+            size=size,
+            model=model,
+        )
+        return {
+            "front_image": front_img,
+            "back_image": back_img,
+            "front_url": front_url,
+            "back_url": back_url,
+            "note": f"{front_note}. OpenAI version uses matched prompts but not shared seed/reference in this app."
+        }
 
-    elif provider == "Grok / xAI":
-        front, _ = generate_with_grok(front_prompt, model)
-        back, _ = generate_with_grok(back_prompt, model)
+    if provider == "Grok / xAI":
+        front_img, front_url, front_note = generate_with_grok(
+            prompt=front_prompt,
+            model=model,
+        )
+        back_img, back_url, back_note = generate_with_grok(
+            prompt=back_prompt,
+            model=model,
+        )
+        return {
+            "front_image": front_img,
+            "back_image": back_img,
+            "front_url": front_url,
+            "back_url": back_url,
+            "note": f"{front_note}. xAI version uses matched prompts but not shared seed/reference in this app."
+        }
 
-    else:
-        front, _ = generate_with_together(front_prompt, model, steps)
-        back, _ = generate_with_together(back_prompt, model, steps)
-
-    return front, back
+    raise RuntimeError(f"Unsupported provider: {provider}")
 
 
 # =========================
 # UI
 # =========================
-st.title("🎨 Coloring Book Front Page Generator")
-st.caption("Generate printable coloring-book front cover art using OpenAI, Grok/xAI, or Together AI.")
+st.title("📚 Front + Back Book Cover Generator")
+st.caption("Generate a matching front cover and a back-cover background image for children's books.")
 
 with st.sidebar:
     st.header("Provider")
+
     provider = st.selectbox(
         "Choose image provider",
-        ["OpenAI", "Grok / xAI", "Together AI"],
+        ["Together AI", "OpenAI", "Grok / xAI"],
+        index=0,
     )
 
-    if provider == "OpenAI":
+    if provider == "Together AI":
+        provider_model = st.selectbox(
+            "Together AI image model",
+            [
+                "black-forest-labs/FLUX.1-schnell",
+                "black-forest-labs/FLUX.1-dev",
+                "black-forest-labs/FLUX.1-Kontext-pro",
+            ],
+            index=0,
+        )
+        width = st.selectbox("Width", [768, 1024], index=1)
+        height = st.selectbox("Height", [1024, 1536], index=1)
+        together_steps = st.slider("Inference steps", min_value=2, max_value=20, value=8)
+        use_random_seed = st.checkbox("Use random seed", value=True)
+
+        if use_random_seed:
+            seed_value = random.randint(1, 999999999)
+            st.caption(f"Seed for this run: `{seed_value}`")
+        else:
+            seed_value = st.number_input("Seed", min_value=1, max_value=999999999, value=12345, step=1)
+
+        image_size = None
+
+    elif provider == "OpenAI":
         provider_model = st.selectbox(
             "OpenAI image model",
             ["gpt-image-1"],
@@ -223,68 +376,69 @@ with st.sidebar:
             ["1024x1024", "1024x1536", "1536x1024"],
             index=1,
         )
+        width = None
+        height = None
+        together_steps = None
+        seed_value = None
 
-    elif provider == "Grok / xAI":
+    else:
         provider_model = st.selectbox(
             "xAI image model",
             ["grok-imagine-image"],
         )
-        image_size = "portrait"
-
-    else:
-        provider_model = st.selectbox(
-            "Together AI image model",
-            [
-                "black-forest-labs/FLUX.1-schnell",
-                "black-forest-labs/FLUX.1-dev",
-                "stabilityai/stable-diffusion-xl-base-1.0",
-            ],
-        )
-        together_steps = st.slider("Inference steps", min_value=2, max_value=20, value=8)
-        image_size = "provider-managed"
+        image_size = None
+        width = None
+        height = None
+        together_steps = None
+        seed_value = None
 
     st.divider()
     st.subheader("API key status")
+    st.write(f"Together AI: {'✅ Found' if TOGETHER_API_KEY else '❌ Missing'}")
     st.write(f"OpenAI: {'✅ Found' if OPENAI_API_KEY else '❌ Missing'}")
     st.write(f"xAI / Grok: {'✅ Found' if XAI_API_KEY else '❌ Missing'}")
-    st.write(f"Together AI: {'✅ Found' if TOGETHER_API_KEY else '❌ Missing'}")
 
+    st.divider()
+    st.info(
+        "Best consistency path: Together AI + same seed + front image reused as reference for back cover."
+    )
 
-col1, col2 = st.columns([1.1, 1])
+col1, col2 = st.columns([1.15, 1])
 
 with col1:
-    st.subheader("Cover details")
-    title = st.text_input("Book title", value="Cute Space Animals")
-    subtitle = st.text_input("Subtitle", value="Fun Coloring Book for Kids Ages 4-8")
+    st.subheader("Book details")
+
+    title = st.text_input("Book title", value="Celebration")
+    subtitle = st.text_input("Subtitle", value="Fun Colouring Book for Kids Ages 4-10")
     theme = st.text_area(
         "Theme / subject",
-        value="adorable animals in space, planets, stars, rockets, friendly alien details",
-        height=100,
+        value="joyful children celebrating at a festive party with balloons, bunting, confetti, fireworks style decorations, warm happy cartoon atmosphere",
+        height=120,
     )
     age_group = st.selectbox(
         "Age group",
-        ["Ages 3-5", "Ages 4-8", "Ages 6-9", "Ages 8-12"],
-        index=1,
+        ["Ages 3-5", "Ages 4-8", "Ages 4-10", "Ages 6-9", "Ages 8-12"],
+        index=2,
     )
     include_text = st.checkbox(
         "Ask model to include title text in image",
         value=False,
-        help="Many image models still struggle with perfect text. Keeping this off is usually safer.",
+        help="Usually better to keep this off and add text later in Canva or Photoshop.",
     )
     extra_style = st.text_area(
         "Extra style instructions",
-        value="decorative border, fun cover composition, stars around the edges, bold black outlines, no shading, no grayscale",
-        height=100,
+        value="warm festive palette, soft sunlight feel, cheerful expressions, premium kids book illustration, clean readable composition, polished cartoon style, joyful and bright",
+        height=120,
     )
 
     manual_prompt = st.text_area(
-        "Optional: edit the final prompt manually",
+        "Optional: override prompt manually",
         value="",
         height=180,
         placeholder="Leave blank to use the app-generated prompt.",
     )
 
-    if st.button("Generate covers (Front + Back)", type="primary", use_container_width=True):
+    if st.button("Generate Front + Back", type="primary", use_container_width=True):
         try:
             final_prompt = manual_prompt.strip() or normalize_cover_prompt(
                 title=title,
@@ -297,21 +451,26 @@ with col1:
 
             st.session_state["final_prompt"] = final_prompt
 
-            with st.spinner("Generating front and back covers..."):
-                front_img, back_img = generate_dual_images(
+            with st.spinner("Generating matching covers..."):
+                result = generate_dual_images(
                     provider=provider,
-                    prompt=final_prompt,
+                    base_prompt=final_prompt,
                     model=provider_model,
-                    size=image_size if provider == "OpenAI" else None,
-                    steps=together_steps if provider == "Together AI" else None,
+                    size=image_size,
+                    steps=together_steps,
+                    width=width,
+                    height=height,
+                    seed=seed_value,
                 )
 
-            st.session_state["front_image"] = front_img
-            st.session_state["back_image"] = back_img
-            st.success("Front and back covers generated successfully.")
+            st.session_state["front_image"] = result["front_image"]
+            st.session_state["back_image"] = result["back_image"]
+            st.session_state["front_url"] = result["front_url"]
+            st.session_state["back_url"] = result["back_url"]
+            st.session_state["generation_note"] = result["note"]
+            st.session_state["seed_used"] = seed_value
 
-        except Exception as e:
-            st.error(f"Generation failed: {e}")
+            st.success("Front cover and back-cover background generated successfully.")
 
         except Exception as e:
             st.error(f"Generation failed: {e}")
@@ -319,28 +478,43 @@ with col1:
 with col2:
     st.subheader("Preview")
 
-    if "front_image" in st.session_state:
-        colf, colb = st.columns(2)
+    if "front_image" in st.session_state and "back_image" in st.session_state:
+        prev1, prev2 = st.columns(2)
 
-        with colf:
+        with prev1:
             st.image(st.session_state["front_image"], caption="Front Cover", use_container_width=True)
-            front_bytes = pil_to_png_bytes(st.session_state["front_image"])
-            st.download_button("Download Front", front_bytes, file_name="front_cover.png")
+            st.download_button(
+                "Download Front PNG",
+                data=pil_to_png_bytes(st.session_state["front_image"]),
+                file_name="front_cover.png",
+                mime="image/png",
+                use_container_width=True,
+            )
 
-        with colb:
-            st.image(st.session_state["back_image"], caption="Back Cover", use_container_width=True)
-            back_bytes = pil_to_png_bytes(st.session_state["back_image"])
-            st.download_button("Download Back", back_bytes, file_name="back_cover.png")
+        with prev2:
+            st.image(st.session_state["back_image"], caption="Back Cover Background", use_container_width=True)
+            st.download_button(
+                "Download Back PNG",
+                data=pil_to_png_bytes(st.session_state["back_image"]),
+                file_name="back_cover_background.png",
+                mime="image/png",
+                use_container_width=True,
+            )
+
+        st.caption(st.session_state.get("generation_note", ""))
+
+        if st.session_state.get("seed_used") is not None:
+            st.caption(f"Seed used: `{st.session_state['seed_used']}`")
 
     else:
-        st.info("Your generated covers will appear here.")
+        st.info("Your generated front cover and back-cover background will appear here.")
 
 st.divider()
 
-with st.expander("Show final prompt", expanded=True):
+with st.expander("Show final prompt", expanded=False):
     st.code(st.session_state.get("final_prompt", "Generate once to see the final prompt here."), language="text")
 
-with st.expander("Suggested secrets.toml"):
+with st.expander("Secrets for Streamlit Cloud", expanded=False):
     st.code(
         '''
 OPENAI_API_KEY = "your_openai_key"
@@ -350,7 +524,7 @@ TOGETHER_API_KEY = "your_together_key"
         language="toml",
     )
 
-with st.expander("Suggested requirements.txt"):
+with st.expander("requirements.txt", expanded=False):
     st.code(
         '''
 streamlit
@@ -365,9 +539,9 @@ together
 st.markdown(
     """
 ### Notes
-- OpenAI image generation is available through the image generation API guide. ([platform.openai.com](https://platform.openai.com/docs/guides/image-generation))
-- xAI supports image generation with `grok-imagine-image`, and also provides an OpenAI-compatible API pattern at `https://api.x.ai/v1`. ([docs.x.ai](https://docs.x.ai/developers/model-capabilities/images/generation))
-- Together AI supports image generation through `client.images.generate(...)`, including models such as FLUX and SDXL. ([docs.together.ai](https://docs.together.ai/docs/images-overview))
-- Streamlit recommends keeping API keys in `.streamlit/secrets.toml` or environment variables instead of hardcoding them. ([docs.streamlit.io](https://docs.streamlit.io/develop/concepts/connections/secrets-management))
+- Together AI is the recommended provider here for strongest cover-to-cover consistency.
+- For Together, this app keeps the same seed and reuses the front image as a reference for the back image.
+- The back cover prompt is intentionally written as a background-only composition so you can place your own blurb later.
+- For OpenAI and xAI, this app still generates both images, but without the same seed/reference workflow used for Together.
 """
 )
