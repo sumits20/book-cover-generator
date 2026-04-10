@@ -239,15 +239,17 @@ def build_back_prompt(base_prompt: str) -> str:
 
 Image goal:
 - BACK COVER
-- background-only style scene for blurb placement
-- same world, same theme, same palette family, same lighting mood, same temperature as the front
-- NO main character portrait
-- NO central subject
-- NO large foreground figure
-- keep decorative environmental details only
-- provide a calmer composition with open readable space in the middle and upper-middle for blurb text
-- suitable as a professional back cover background
-- No texts
+- create only the background scene of the same book world
+- maintain the same theme, same palette family, same lighting mood, same color temperature, same festive atmosphere as the front cover
+- no main character close-up
+- no big person in the center
+- no dominant foreground subject
+- no title text
+- no subtitle text
+- keep the composition softer and more open
+- leave wide empty readable space in the middle and upper-middle for blurb text
+- add only light environmental elements like balloons, bunting, confetti, stars, soft decorative shapes, distant background details
+- professional children's book back-cover background
 """
 
 
