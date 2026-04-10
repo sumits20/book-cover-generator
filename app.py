@@ -61,15 +61,16 @@ Target age group: {age_group}
 Book title: {title}
 Subtitle: {subtitle}
 Style requirements:
-- black and white line art
-- clean bold outlines
-- high contrast
-- printable coloring-book style
-- rich decorative details but enough open areas for coloring
+- vibrant full color illustration
+- cartoonish, cheerful, kid-friendly style
+- soft lighting with depth of field (background slightly blurred)
+- rich colors with smooth gradients
+- detailed but clean composition
+- professional children’s book cover style
 - centered balanced composition
-- white background
+- visually engaging foreground subject with depth
 - portrait front cover composition
-- kid-friendly and appealing
+- joyful and appealing mood
 {text_rule}
 Additional styling: {extra_style}
 """.strip()
