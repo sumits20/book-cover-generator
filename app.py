@@ -190,7 +190,13 @@ def generate_with_together(
         "n": 1,
     }
 
-    if reference_images:
+    # Only use reference images for models that support them
+    reference_capable_models = [
+        "black-forest-labs/FLUX.1-Kontext-pro",
+        "black-forest-labs/FLUX.1-Kontext-max",
+    ]
+
+    if reference_images and model in reference_capable_models:
         kwargs["reference_images"] = reference_images
 
     response = client.images.generate(**kwargs)
@@ -205,8 +211,11 @@ def generate_with_together(
     else:
         raise RuntimeError("Together AI returned no image data.")
 
-    return img, image_url, f"Generated with Together AI using {model} (seed={seed})"
+    note = f"Generated with Together AI using {model} (seed={seed})"
+    if reference_images and model not in reference_capable_models:
+        note += " | reference image skipped because this model does not support it"
 
+    return img, image_url, note
 
 # =========================
 # Prompt builders
