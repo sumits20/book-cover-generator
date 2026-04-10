@@ -374,17 +374,22 @@ with st.sidebar:
             ],
             index=0,
         )
+    
         width = st.selectbox("Width", [768, 1024], index=1)
-        height = st.selectbox("Height", [1024, 1536], index=1)
+        ratio = 11 / 8.5
+        height = int(width * ratio)
+    
+        st.caption(f"Fixed 8.5x11 ratio → {width} x {height}")
+    
         together_steps = st.slider("Inference steps", min_value=2, max_value=20, value=8)
         use_random_seed = st.checkbox("Use random seed", value=True)
-
+    
         if use_random_seed:
             seed_value = random.randint(1, 999999999)
             st.caption(f"Seed for this run: `{seed_value}`")
         else:
             seed_value = st.number_input("Seed", min_value=1, max_value=999999999, value=12345, step=1)
-
+    
         image_size = None
 
     elif provider == "OpenAI":
@@ -392,13 +397,13 @@ with st.sidebar:
             "OpenAI image model",
             ["gpt-image-1"],
         )
-        width = st.selectbox("Width", [768, 1024], index=1)
-        
-        ratio = 11 / 8.5
-        height = int(width * ratio)
-        
-        st.caption(f"Auto height for 8.5x11 ratio: {height}")
-        
+    
+        # OpenAI uses size, not width/height
+        image_size = "1024x1536"
+        st.caption("OpenAI uses fixed size strings. Using portrait size: 1024x1536")
+    
+        width = None
+        height = None
         together_steps = None
         seed_value = None
 
